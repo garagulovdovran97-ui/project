@@ -88,8 +88,10 @@ if st.button("Search Knowledge Base"):
             if results:
                 for result in results:
                     st.write(result["text"])
+
                     st.caption(
-                        f"Similarity score: {result['score']:.3f}"
+                        f"Source: {result['source']} | "
+                        f"Similarity: {result['score']:.3f}"
                     )
             else:
                 st.info("No information found.")

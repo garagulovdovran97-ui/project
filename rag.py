@@ -1,77 +1,115 @@
-from sentence_transformers import SentenceTransformer
-from pypdf import PdfReader
+
 import os
+import re
+
+import streamlit as st
+from pypdf import PdfReader
+from sentence_transformers import SentenceTransformer, util
+
 
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 
-model = SentenceTransformer(MODEL_NAME)
+
+@st.cache_resource
+def load_embedding_model():
+    return SentenceTransformer(MODEL_NAME)
 
 
 def load_documents():
     documents = []
     folder = "documents"
 
+    if not os.path.exists(folder):
+        return documents
+
     for filename in os.listdir(folder):
         path = os.path.join(folder, filename)
 
-        if filename.endswith(".txt"):
+        if filename.lower().endswith(".txt"):
             with open(path, "r", encoding="utf-8") as file:
-                documents.append(file.read())
+                text = file.read()
 
-        elif filename.endswith(".pdf"):
+        elif filename.lower().endswith(".pdf"):
             reader = PdfReader(path)
             text = "\n".join(
-                page.extract_text() or "" for page in reader.pages
+                page.extract_text() or ""
+                for page in reader.pages
             )
-            documents.append(text)
+
+        else:
+            continue
+
+        if text.strip():
+            documents.append({
+                "filename": filename,
+                "text": text
+            })
 
     return documents
 
 
-def split_text(documents):
+def split_text(documents, chunk_size=500, overlap=100):
     chunks = []
 
     for document in documents:
-        paragraphs = document.split("\n")
+        text = document["text"]
+        filename = document["filename"]
 
-        for paragraph in paragraphs:
-            paragraph = paragraph.strip()
+        text = re.sub(r"\s+", " ", text).strip()
 
-            if len(paragraph) > 30:
-                chunks.append(paragraph)
+        start = 0
+
+        while start < len(text):
+            end = start + chunk_size
+            chunk_text = text[start:end].strip()
+
+            if chunk_text:
+                chunks.append({
+                    "text": chunk_text,
+                    "source": filename
+                })
+
+            start += chunk_size - overlap
 
     return chunks
 
 
-def search_documents(question, chunks):
+def search_documents(question, chunks, top_k=3):
     if not chunks:
         return []
+
+    model = load_embedding_model()
 
     question_vector = model.encode(
         question,
         convert_to_tensor=True
     )
 
+    texts = [chunk["text"] for chunk in chunks]
+
     document_vectors = model.encode(
-        chunks,
+        texts,
         convert_to_tensor=True
     )
-
-    from sentence_transformers import util
 
     scores = util.cos_sim(
         question_vector,
         document_vectors
     )[0]
 
+    results = []
+
     top_results = scores.topk(
-        k=min(3, len(chunks))
+        k=min(top_k, len(chunks))
     )
 
-    return [
-        {
-            "text": chunks[index],
+    for index in top_results.indices:
+        index = int(index)
+
+        results.append({
+            "text": chunks[index]["text"],
+            "source": chunks[index]["source"],
             "score": float(scores[index])
-        }
-        for index in top_results.indices
-    ]
+        })
+
+    return results

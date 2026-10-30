@@ -1,65 +1,106 @@
+
 import streamlit as st
 from PIL import Image
 from transformers import pipeline
+from rag import load_documents, split_text, search_documents
 
 st.set_page_config(
     page_title="Plant Disease AI",
-    page_icon="🌿",
-    layout="centered"
+    page_icon="🌿"
 )
 
 st.title("🌿 Plant Disease Detection & AI Assistant")
 
-st.write(
-    "Upload a plant leaf image to identify possible diseases."
-)
-
 @st.cache_resource
-def load_model():
+def load_classifier():
     return pipeline(
         "image-classification",
         model="neghani/plantvillage-mobilenetv2",
-        revision="v1.0",
         device=-1
     )
 
+@st.cache_resource
+def load_knowledge_base():
+    documents = load_documents()
+    return split_text(documents)
+
+
+# PART 1: IMAGE ANALYSIS
+
+st.header("1. Plant Disease Detection")
+
 uploaded_file = st.file_uploader(
-    "Upload a leaf image",
+    "Upload a plant leaf image",
     type=["jpg", "jpeg", "png"]
 )
 
-if uploaded_file is not None:
+if uploaded_file:
     image = Image.open(uploaded_file).convert("RGB")
-
-    st.image(image, caption="Uploaded leaf", use_container_width=True)
+    st.image(image, use_container_width=True)
 
     if st.button("Analyze Image"):
         with st.spinner("Analyzing image..."):
             try:
-                classifier = load_model()
-                predictions = classifier(image, top_k=3)
+                classifier = load_classifier()
+                results = classifier(image, top_k=3)
 
-                st.subheader("Analysis Results")
+                st.subheader("Prediction Results")
 
-                for i, result in enumerate(predictions, start=1):
-                    label = result["label"].replace("___", " — ")
-                    confidence = result["score"] * 100
-
-                    st.write(f"{i}. **{label}**")
-                    st.progress(float(result["score"]))
-                    st.write(f"Model score: {confidence:.2f}%")
+                for result in results:
+                    st.write(
+                        f"**{result['label']}** — "
+                        f"{result['score'] * 100:.2f}%"
+                    )
 
                 st.warning(
-                    "This is an AI prediction, not a confirmed diagnosis. "
-                    "Results may be inaccurate, especially for field photos. "
-                    "Consult an agricultural expert before treating plants."
+                    "AI predictions are not confirmed diagnoses."
                 )
 
             except Exception as error:
-                st.error(f"An error occurred: {error}")
+                st.error(str(error))
+
+
+# PART 2: TEXT SEARCH
+
+st.divider()
+
+st.header("2. Plant Disease AI Assistant")
+
+st.write(
+    "Ask a question about plant diseases. "
+    "The system will search your TXT and PDF documents."
+)
+
+question = st.text_input(
+    "Enter your question:",
+    placeholder="What are the symptoms of early blight?"
+)
+
+if st.button("Search Knowledge Base"):
+    if question.strip():
+        try:
+            with st.spinner("Searching documents..."):
+                chunks = load_knowledge_base()
+                results = search_documents(question, chunks)
+
+            st.subheader("Information from Documents")
+
+            if results:
+                for result in results:
+                    st.write(result["text"])
+                    st.caption(
+                        f"Similarity score: {result['score']:.3f}"
+                    )
+            else:
+                st.info("No information found.")
+
+        except Exception as error:
+            st.error(str(error))
+    else:
+        st.warning("Please enter a question.")
 
 st.divider()
 
 st.caption(
-    "Educational project using an open-source image classification model."
+    "Plant Disease AI | Computer Vision + Document Search"
 )

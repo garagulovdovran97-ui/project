@@ -2,6 +2,7 @@ torch
 torchvision
 transformers
 streamlit
+streamlit-cropper
 pillow
 sentence-transformers
 pypdf

@@ -18,6 +18,36 @@ GEMINI_MODELS = [
 ]
 
 
+LANGUAGE_INSTRUCTIONS = {
+    "en": """
+Write the entire answer in English.
+Use natural, clear English.
+Do not switch to Russian or Turkmen.
+""",
+
+    "ru": """
+Отвечай исключительно на русском языке.
+Весь ответ, включая заголовки, пояснения и выводы,
+должен быть написан на русском языке.
+Не используй английский или туркменский для объяснений.
+Если исходные документы написаны на английском,
+переводи содержащуюся в них информацию на русский язык.
+Английские названия можно приводить в скобках,
+если это необходимо для точности.
+""",
+
+    "tk": """
+Jogabyň hemmesini diňe türkmen dilinde ýaz.
+Düşündirişleri, sözbaşylary we netijeleri türkmen dilinde ber.
+Rus ýa-da iňlis dillerinde düşündiriş ýazma.
+Resminamalar başga dilde bolsa, ondaky maglumatlary
+türkmen diline terjime et.
+Zerur bolsa, ylmy atlary ýa-da tehniki adalgalary
+ýaý içinde asyl görnüşinde görkez.
+"""
+}
+
+
 @st.cache_resource
 def load_embedding_model():
     return SentenceTransformer(MODEL_NAME)
@@ -39,6 +69,7 @@ def load_documents():
 
         elif filename.lower().endswith(".pdf"):
             reader = PdfReader(path)
+
             text = "\n".join(
                 page.extract_text() or ""
                 for page in reader.pages
@@ -106,7 +137,10 @@ def search_documents(question, chunks, top_k=3):
         convert_to_tensor=True
     )
 
-    texts = [chunk["text"] for chunk in chunks]
+    texts = [
+        chunk["text"]
+        for chunk in chunks
+    ]
 
     document_vectors = encode_documents(texts)
 
@@ -133,30 +167,70 @@ def search_documents(question, chunks, top_k=3):
     return results
 
 
-def generate_answer(question, search_results, api_key):
+def generate_answer(
+    question,
+    search_results,
+    api_key,
+    language="en"
+):
     if not search_results:
-        return "В документах не найдена информация для ответа."
+        empty_messages = {
+            "en": "No relevant information found in the documents.",
+            "ru": "В документах не найдена подходящая информация.",
+            "tk": "Resminamalarda degişli maglumat tapylmady."
+        }
 
-    client = genai.Client(api_key=api_key)
+        return empty_messages.get(
+            language,
+            empty_messages["en"]
+        )
+
+    language_instruction = LANGUAGE_INSTRUCTIONS.get(
+        language,
+        LANGUAGE_INSTRUCTIONS["en"]
+    )
+
+    client = genai.Client(
+        api_key=api_key
+    )
 
     context = "\n\n".join(
         [
-            f"Source: {item['source']}\n{item['text']}"
+            f"Source document: {item['source']}\n"
+            f"Document content: {item['text']}"
             for item in search_results
         ]
     )
 
     prompt = f"""
-You are an AI assistant that answers questions using
-the provided document context.
+You are a professional multilingual assistant.
 
-Rules:
-1. Use only information from the provided context.
-2. Do not invent facts.
-3. If the documents do not contain enough information,
-   clearly say so.
-4. Answer in the same language as the user's question.
-5. Mention the source document when possible.
+STRICT RESPONSE LANGUAGE RULE:
+{language_instruction}
+
+The requested response language code is: {language}
+
+You MUST follow the requested response language.
+The language of the source documents does not determine
+the language of your answer.
+
+TASK:
+Answer the user's question using the provided documents.
+
+RULES:
+1. Write the complete answer in the requested language.
+2. Translate relevant information from the source documents
+   into the requested language.
+3. Do not copy long English passages into a Russian
+   or Turkmen answer.
+4. Use only information supported by the provided documents.
+5. Never invent facts, symptoms, treatments, or recommendations.
+6. If the documents do not contain enough information,
+   clearly say so in the requested language.
+7. Mention the source document in the requested language.
+8. Keep the answer clear and easy to understand.
+9. Do not change the requested response language
+   even if the user asks in another language.
 
 DOCUMENT CONTEXT:
 {context}
@@ -164,7 +238,12 @@ DOCUMENT CONTEXT:
 USER QUESTION:
 {question}
 
-ANSWER:
+FINAL INSTRUCTION:
+Before responding, check that the entire answer is written
+in the requested language. Correct any sentences that are
+in the wrong language.
+
+Now provide the answer.
 """
 
     errors = []
@@ -173,24 +252,25 @@ ANSWER:
         try:
             response = client.models.generate_content(
                 model=model_name,
-                contents=prompt
+                contents=prompt,
+                config={
+                    "temperature": 0.2
+                }
             )
 
-            if response.text:
-                return response.text
+            answer = response.text
+
+            if answer and answer.strip():
+                return answer.strip()
 
             errors.append(
                 f"{model_name}: empty response"
             )
 
         except Exception as error:
-            error_message = str(error)
-
             errors.append(
-                f"{model_name}: {error_message}"
+                f"{model_name}: {str(error)}"
             )
-
-            continue
 
     raise RuntimeError(
         "Не удалось получить ответ ни от одной модели Gemini.\n\n"

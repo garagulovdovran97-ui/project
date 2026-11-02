@@ -48,6 +48,7 @@ TEXTS = {
         "ai_error": "AI Assistant error",
         "caption": "Plant Disease AI | Computer Vision + RAG + Gemini"
     },
+
     "ru": {
         "title": "Определение болезней растений и ИИ-помощник",
         "language": "Выберите язык",
@@ -70,6 +71,7 @@ TEXTS = {
         "ai_error": "Ошибка ИИ-помощника",
         "caption": "Plant Disease AI | Компьютерное зрение + RAG + Gemini"
     },
+
     "tk": {
         "title": "Ösümlik kesellerini anyklamak we emeli aň kömekçisi",
         "language": "Dili saýlaň",
@@ -77,7 +79,7 @@ TEXTS = {
         "upload": "Ösümlik ýapragynyň suratyny ýükläň",
         "analyze": "Suraty seljermek",
         "prediction": "Anyklama netijeleri",
-        "warning": "Emeli aňyň netijesi gutarnykly lukmançylyk däl, hünärmen tarapyndan tassyklanmalydyr.",
+        "warning": "Emeli aňyň netijesi gutarnykly diagnoz däldir.",
         "rag": "2. Ösümlik keselleri boýunça emeli aň kömekçisi",
         "description": "Ösümlik keselleri barada sorag beriň. Kömekçi resminamalardan maglumat gözläp, jogap taýýarlar.",
         "question": "Soragyňyzy giriziň:",
@@ -94,8 +96,68 @@ TEXTS = {
     }
 }
 
+
+# DISEASE NAME TRANSLATIONS
+
+DISEASE_TRANSLATIONS = {
+    "en": {
+        "Early blight": "Early blight",
+        "Late blight": "Late blight",
+        "healthy": "Healthy",
+        "Bacterial spot": "Bacterial spot",
+        "Leaf Mold": "Leaf Mold",
+        "Septoria leaf spot": "Septoria leaf spot",
+        "Spider mites": "Spider mites",
+        "Target Spot": "Target Spot",
+        "Yellow Leaf Curl Virus": "Yellow Leaf Curl Virus",
+        "Mosaic virus": "Mosaic virus"
+    },
+
+    "ru": {
+        "Early blight": "Ранняя пятнистость",
+        "Late blight": "Фитофтороз",
+        "healthy": "Здоровое растение",
+        "Bacterial spot": "Бактериальная пятнистость",
+        "Leaf Mold": "Листовая плесень",
+        "Septoria leaf spot": "Септориоз",
+        "Spider mites": "Паутинный клещ",
+        "Target Spot": "Мишеневидная пятнистость",
+        "Yellow Leaf Curl Virus": "Вирус жёлтой курчавости листьев",
+        "Mosaic virus": "Вирус мозаики"
+    },
+
+    "tk": {
+        "Early blight": "Irki tegmilli kesel",
+        "Late blight": "Fitoftoroz",
+        "healthy": "Sagdyn ösümlik",
+        "Bacterial spot": "Bakterial tegmilli kesel",
+        "Leaf Mold": "Ýaprak heň keseli",
+        "Septoria leaf spot": "Septorioz",
+        "Spider mites": "Öýjükli sakyrtga",
+        "Target Spot": "Tegmilli kesel",
+        "Yellow Leaf Curl Virus": "Ýapragyň sary towlanma wirusy",
+        "Mosaic virus": "Mozaika wirusy"
+    }
+}
+
+
+def translate_disease(label, language):
+    translations = DISEASE_TRANSLATIONS.get(language, {})
+
+    for english_name, translated_name in translations.items():
+        if english_name.lower() in label.lower():
+            return label.replace(
+                english_name,
+                translated_name
+            )
+
+    return label
+
+
+# SELECT LANGUAGE
+
 selected_language = st.selectbox(
-    "🌐 " + "Language / Язык / Dil",
+    "🌐 Language / Язык / Dil",
     list(LANGUAGES.keys())
 )
 
@@ -154,8 +216,15 @@ if uploaded_file:
             st.subheader(t["prediction"])
 
             for result in results:
+                original_label = result["label"]
+
+                translated_label = translate_disease(
+                    original_label,
+                    lang
+                )
+
                 st.write(
-                    f"**{result['label']}** — "
+                    f"**{translated_label}** — "
                     f"{result['score'] * 100:.2f}%"
                 )
 
@@ -193,18 +262,21 @@ if st.button(t["ask"], type="primary"):
 
             else:
                 with st.spinner(t["generating"]):
+
                     api_key = st.secrets["GEMINI_API_KEY"]
 
                     answer = generate_answer(
                         question,
                         results,
-                        api_key
+                        api_key,
+                        language=lang
                     )
 
                 st.subheader(t["answer"])
                 st.write(answer)
 
                 with st.expander(t["sources"]):
+
                     for result in results:
                         st.write(result["text"])
 
@@ -218,4 +290,5 @@ if st.button(t["ask"], type="primary"):
 
 
 st.divider()
+
 st.caption(t["caption"])

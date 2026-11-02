@@ -1,16 +1,17 @@
-# Plant Disease Detection & AI Assistant
+# Fruit, Vegetable & Leaf Health Assistant
 
 ## Project Overview
 
-Plant Disease Detection & AI Assistant is an educational multilingual Streamlit application that combines computer vision, document search, and Gemini-generated answers.
+This multilingual Streamlit application recognizes common fruits and vegetables, suggests possible diseases from plant-leaf photos, and answers plant-health questions using a local knowledge base and Gemini.
 
-Users can upload a plant image, select a region, check whether it appears to contain a leaf, and view possible disease classifications. They can also ask questions about plant diseases in English, Russian, or Turkmen; the app searches its local knowledge base and asks Gemini to answer using the retrieved passages.
+Choose between two separate image-analysis modes: whole fruit/vegetable recognition or possible leaf-disease classification. Users can also ask plant-health questions in English, Russian, or Turkmen; the app searches its local documents and asks Gemini to answer using the retrieved passages.
 
 ## Technologies
 
 - Python
 - PyTorch
 - Hugging Face Transformers
+- ResNet-50
 - MobileNetV2
 - Sentence Transformers
 - Streamlit
@@ -20,12 +21,14 @@ Users can upload a plant image, select a region, check whether it appears to con
 
 ## Main Features
 
-### 1. Plant Disease Detection
-- Upload an image and select the leaf area to analyze.
-- Classify the selected image with the pre-trained `neghani/plantvillage-mobilenetv2` model and display the top three predictions and confidence scores.
-- Show the interface and translated disease names in English, Russian, or Turkmen.
+### 1. Fruit and Vegetable Recognition
+- Upload a fruit or vegetable photo and select the item to reduce background interference.
+- Classify it with the pre-trained [`dima806/fruit_vegetable_image_detection`](https://huggingface.co/dima806/fruit_vegetable_image_detection) ViT model and show up to three matches.
+- Recognize 36 classes, including potato, tomato, apple, banana, carrot, cucumber, grapes, and watermelon.
+- Show translated produce names in English, Russian, or Turkmen.
+- In a separate mode, select a leaf area and get possible disease matches using the 38-class `neghani/plantvillage-mobilenetv2` model.
 
-### 2. Knowledge Base Assistant (RAG)
+### 2. Plant Health Assistant (RAG)
 - Read TXT and PDF documents.
 - Split documents into text chunks.
 - Convert text into semantic embeddings.
@@ -37,6 +40,7 @@ Users can upload a plant image, select a region, check whether it appears to con
 ```text
 project/
 ├── app.py
+├── classification.py
 ├── rag.py
 ├── requirements.txt
 ├── README.md
@@ -70,14 +74,16 @@ streamlit run app.py
 
 ## Limitations
 
-- AI predictions are not guaranteed to be correct.
-- Select a leaf area without fruit or background for the most useful prediction. The classifier returns the closest class it knows; it does not independently verify that the image contains a leaf.
-- The classifier recognizes 38 PlantVillage classes. It may be unreliable on other plant species, image conditions, or diseases outside those classes.
-- The confidence score is a model score, not a measured probability that the diagnosis is correct.
-- The knowledge base contains only information provided in the documents.
+- The fruit-and-vegetable model recognizes only its 36 trained classes. It is not a general object detector and does not diagnose plant diseases.
+- The leaf model recognizes only 38 PlantVillage classes and works on close-up leaf photos, not whole products. A fruit photo submitted in leaf mode can receive a plausible-looking but meaningless leaf label, so use fruit/vegetable recognition for whole products. It can also be inaccurate on unfamiliar plants, photo conditions, or diseases outside its training classes.
+- Leaf predictions are suggestions, not confirmed diagnoses; confidence scores are not calibrated probabilities.
+- In a quick check on 17 labeled potato images from a public test split, this model ranked potato first on 15; this small check is not a guarantee for independent phone photos.
+- Model scores are not calibrated probabilities. Even a high score can be wrong, especially for blurry photos, unusual lighting, cluttered backgrounds, or items outside the supported classes.
+- A clear, close photo of one whole item generally matches the model's training task better than a distant or cluttered scene.
+- If an item is misclassified, select just that item with the crop rectangle and analyze again; the actual photo may differ from the model's training images.
 - Gemini answers are based on retrieved passages and may still be inaccurate.
 - Internet access is required for initial model downloads and Gemini API requests.
 
 ## Purpose
 
-This project demonstrates the practical application of computer vision, deep learning, semantic search, multilingual interfaces, and Retrieval-Augmented Generation.
+This project demonstrates practical computer vision, multilingual interfaces, semantic search, and Retrieval-Augmented Generation.
